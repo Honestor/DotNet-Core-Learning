@@ -4,18 +4,26 @@ using System.Text;
 
 namespace Caching.Memory.Application
 {
-    public interface ICacheEntry
+    public interface ICacheEntry : IDisposable
     {
         object Key { get; }
+
+        object Value { get; set; }
     }
 
     public class CacheEntry:ICacheEntry
     {
         public object Key { get; private set; }
 
+        public object Value { get; set; }
+
         private readonly Action<CacheEntry> _notifyCacheOfExpiration;
 
         private readonly Action<CacheEntry> _notifyCacheEntryDisposed;
+
+        private readonly Action<CacheEntry> _setEntry;
+
+        private readonly Action<CacheEntry> _entryExpirationNotification;
 
         private IDisposable _scope;
 
@@ -53,6 +61,18 @@ namespace Caching.Memory.Application
                 _setEntry,
                 _entryExpirationNotification
             );
+        }
+
+        private bool _added = false;
+        public void Dispose()
+        {
+            if (!_added)
+            {
+                _added = true;
+                _scope.Dispose();
+                _notifyCacheEntryDisposed(this);
+                //PropagateOptions(CacheEntryHelper.Current);
+            }
         }
     }
 }

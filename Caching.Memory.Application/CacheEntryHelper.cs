@@ -1,11 +1,17 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
+using System.Threading;
 
 namespace Caching.Memory.Application
 {
     public class CacheEntryHelper
     {
+        private static readonly AsyncLocal<CacheEntryStack> _scopes = new AsyncLocal<CacheEntryStack>();
+        internal static CacheEntryStack Scopes
+        {
+            get { return _scopes.Value; }
+            set { _scopes.Value = value; }
+        }
+
         internal static IDisposable EnterScope(CacheEntry entry)
         {
             var scopes = GetOrCreateScopes();

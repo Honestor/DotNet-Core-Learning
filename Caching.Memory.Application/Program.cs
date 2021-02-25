@@ -6,7 +6,10 @@ namespace Caching.Memory.Application
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello World!");
+            var cache = new MemoryCache();
+            var entry = cache.CreateEntry("111");
+            entry.Value = "222";
+            entry.Dispose();
         }
     }
 }
