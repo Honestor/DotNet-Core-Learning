@@ -6,9 +6,20 @@ namespace Caching.Memory.Application
 {
     public interface ICacheEntry : IDisposable
     {
+        /// <summary>
+        /// 缓存的键
+        /// </summary>
         object Key { get; }
 
+        /// <summary>
+        /// 缓存的值
+        /// </summary>
         object Value { get; set; }
+
+        /// <summary>
+        /// 缓存实体的大小
+        /// </summary>
+        long? Size { get; set; }
     }
 
     public class CacheEntry:ICacheEntry
@@ -16,6 +27,24 @@ namespace Caching.Memory.Application
         public object Key { get; private set; }
 
         public object Value { get; set; }
+
+        /// <summary>
+        /// 缓存实体大小
+        /// </summary>
+        private long? _size;
+        public long? Size
+        {
+            get => _size;
+            set
+            {
+                if (value < 0)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(value), value, $"{nameof(value)} must be non-negative.");
+                }
+
+                _size = value;
+            }
+        }
 
         private readonly Action<CacheEntry> _notifyCacheOfExpiration;
 
@@ -25,7 +54,17 @@ namespace Caching.Memory.Application
 
         private readonly Action<CacheEntry> _entryExpirationNotification;
 
+        internal DateTimeOffset? _absoluteExpiration;
+
+        internal TimeSpan? _absoluteExpirationRelativeToNow;
+
         private IDisposable _scope;
+
+        internal EvictionReason EvictionReason { get; private set; }
+
+        internal DateTimeOffset LastAccessed { get; set; }
+
+        private IList<IDisposable> _expirationTokenRegistrations;
 
         internal CacheEntry(
             object key,
@@ -63,6 +102,35 @@ namespace Caching.Memory.Application
             );
         }
 
+        private bool _isExpired;
+        internal void SetExpired(EvictionReason reason)
+        {
+            if (EvictionReason == EvictionReason.None)
+            {
+                EvictionReason = reason;
+            }
+            _isExpired = true;
+            DetachTokens();
+        }
+
+        internal readonly object _lock = new object();
+        private void DetachTokens()
+        {
+            lock (_lock)
+            {
+                var registrations = _expirationTokenRegistrations;
+                if (registrations != null)
+                {
+                    _expirationTokenRegistrations = null;
+                    for (int i = 0; i < registrations.Count; i++)
+                    {
+                        var registration = registrations[i];
+                        registration.Dispose();
+                    }
+                }
+            }
+        }
+
         private bool _added = false;
         public void Dispose()
         {
@@ -74,5 +142,75 @@ namespace Caching.Memory.Application
                 //PropagateOptions(CacheEntryHelper.Current);
             }
         }
+
+        internal bool CheckExpired(DateTimeOffset now)
+        {
+            return _isExpired || CheckForExpiredTime(now) || CheckForExpiredTokens();
+        }
+
+        private bool CheckForExpiredTime(DateTimeOffset now)
+        {
+            if (_absoluteExpiration.HasValue && _absoluteExpiration.Value <= now)
+            {
+                SetExpired(EvictionReason.Expired);
+                return true;
+            }
+
+            if (_slidingExpiration.HasValue
+                && (now - LastAccessed) >= _slidingExpiration)
+            {
+                SetExpired(EvictionReason.Expired);
+                return true;
+            }
+
+            return false;
+        }
+
+        internal bool CheckForExpiredTokens()
+        {
+            if (_expirationTokens != null)
+            {
+                for (int i = 0; i < _expirationTokens.Count; i++)
+                {
+                    var expiredToken = _expirationTokens[i];
+                    if (expiredToken.HasChanged)
+                    {
+                        SetExpired(EvictionReason.TokenExpired);
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+    }
+
+    public enum EvictionReason
+    {
+        None,
+
+        /// <summary>
+        /// Manually
+        /// </summary>
+        Removed,
+
+        /// <summary>
+        /// Overwritten
+        /// </summary>
+        Replaced,
+
+        /// <summary>
+        /// Timed out
+        /// </summary>
+        Expired,
+
+        /// <summary>
+        /// Event
+        /// </summary>
+        TokenExpired,
+
+        /// <summary>
+        /// Overflow
+        /// </summary>
+        Capacity,
     }
 }

@@ -1,6 +1,9 @@
-﻿using System;
+﻿using Microsoft.Extensions.Options;
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading;
 
 namespace Caching.Memory.Application
 {
@@ -17,12 +20,21 @@ namespace Caching.Memory.Application
     {
         private readonly Action<CacheEntry> _setEntry;
         private readonly Action<CacheEntry> _entryExpirationNotification;
+        private readonly MemoryCacheOptions _options;
+        private readonly ConcurrentDictionary<object, CacheEntry> _entries;
 
-        public MemoryCache()
+        public MemoryCache(IOptions<MemoryCacheOptions> optionsAccessor)
         {
+            if (optionsAccessor == null)
+            {
+                throw new ArgumentNullException(nameof(optionsAccessor));
+            }
             _setEntry = SetEntry;
             _entryExpirationNotification = EntryExpired;
+            _options = optionsAccessor.Value;
+            _entries = new ConcurrentDictionary<object, CacheEntry>();
         }
+      
 
         public ICacheEntry CreateEntry(object key)
         {
@@ -35,12 +47,6 @@ namespace Caching.Memory.Application
 
         private void SetEntry(CacheEntry entry)
         {
-            if (_disposed)
-            {
-                // No-op instead of throwing since this is called during CacheEntry.Dispose
-                return;
-            }
-
             if (_options.SizeLimit.HasValue && !entry.Size.HasValue)
             {
                 throw new InvalidOperationException($"Cache entry must specify a value for {nameof(entry.Size)} when {nameof(_options.SizeLimit)} is set.");
@@ -58,9 +64,6 @@ namespace Caching.Memory.Application
                 absoluteExpiration = entry._absoluteExpiration;
             }
 
-            // Applying the option's absolute expiration only if it's not already smaller.
-            // This can be the case if a dependent cache entry has a smaller value, and
-            // it was set by cascading it to its parent.
             if (absoluteExpiration.HasValue)
             {
                 if (!entry._absoluteExpiration.HasValue || absoluteExpiration.Value < entry._absoluteExpiration.Value)
@@ -78,7 +81,6 @@ namespace Caching.Memory.Application
             }
 
             var exceedsCapacity = UpdateCacheSizeExceedsCapacity(entry);
-
             if (!entry.CheckExpired(utcNow) && !exceedsCapacity)
             {
                 var entryAdded = false;
@@ -130,24 +132,41 @@ namespace Caching.Memory.Application
                     priorEntry.InvokeEvictionCallbacks();
                 }
             }
-            else
-            {
-                if (exceedsCapacity)
-                {
-                    // The entry was not added due to overcapacity
-                    entry.SetExpired(EvictionReason.Capacity);
 
-                    TriggerOvercapacityCompaction();
+        }
+
+        private long _cacheSize = 0;
+        private bool UpdateCacheSizeExceedsCapacity(CacheEntry entry)
+        {
+            if (!_options.SizeLimit.HasValue)
+            {
+                return false;
+            }
+
+            var newSize = 0L;
+            for (var i = 0; i < 100; i++)
+            {
+                var sizeRead = Interlocked.Read(ref _cacheSize);
+                newSize = sizeRead + entry.Size.Value;
+
+                if (newSize < 0 || newSize > _options.SizeLimit)
+                {
+                    // Overflow occured, return true without updating the cache size
+                    return true;
                 }
 
-                entry.InvokeEvictionCallbacks();
-                if (priorEntry != null)
+                if (sizeRead == Interlocked.CompareExchange(ref _cacheSize, newSize, sizeRead))
                 {
-                    RemoveEntry(priorEntry);
+                    return false;
                 }
             }
 
-            StartScanForExpiredItems();
+            return true;
+        }
+
+        private void EntryExpired(CacheEntry entry) 
+        { 
+        
         }
 
         public void Remove(object key)
