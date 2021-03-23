@@ -19,7 +19,7 @@ namespace Caching.Memory.Application
     public class MemoryCache : IMemoryCache
     {
         private readonly Action<CacheEntry> _setEntry;
-        private readonly Action<CacheEntry> _entryExpirationNotification;
+        private readonly Action<CacheEntry> _entryExpiration;
         private readonly MemoryCacheOptions _options;
         private readonly ConcurrentDictionary<object, CacheEntry> _entries;
 
@@ -30,7 +30,7 @@ namespace Caching.Memory.Application
                 throw new ArgumentNullException(nameof(optionsAccessor));
             }
             _setEntry = SetEntry;
-            _entryExpirationNotification = EntryExpired;
+            _entryExpiration = EntryExpired;
             _options = optionsAccessor.Value;
             _entries = new ConcurrentDictionary<object, CacheEntry>();
         }
@@ -41,10 +41,14 @@ namespace Caching.Memory.Application
             return new CacheEntry(
                 key,
                 _setEntry,
-                _entryExpirationNotification
+                _entryExpiration
             );
         }
 
+        /// <summary>
+        /// 创建缓存实体
+        /// </summary>
+        /// <param name="entry"></param>
         private void SetEntry(CacheEntry entry)
         {
             if (_options.SizeLimit.HasValue && !entry.Size.HasValue)
@@ -164,6 +168,10 @@ namespace Caching.Memory.Application
             return true;
         }
 
+        /// <summary>
+        /// 实体过期方法
+        /// </summary>
+        /// <param name="entry"></param>
         private void EntryExpired(CacheEntry entry) 
         { 
         

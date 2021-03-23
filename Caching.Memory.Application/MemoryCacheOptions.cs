@@ -25,6 +25,9 @@ namespace Caching.Memory.Application
             }
         }
 
+        /// <summary>
+        /// 时钟
+        /// </summary>
         public ISystemClock Clock { get; set; }
 
         MemoryCacheOptions IOptions<MemoryCacheOptions>.Value

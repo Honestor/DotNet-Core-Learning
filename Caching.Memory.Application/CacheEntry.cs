@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Primitives;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -56,12 +57,52 @@ namespace Caching.Memory.Application
 
         internal DateTimeOffset? _absoluteExpiration;
 
+        /// <summary>
+        /// 滑动过期时间
+        /// </summary>
+        private TimeSpan? _slidingExpiration;
+        public TimeSpan? SlidingExpiration
+        {
+            get
+            {
+                return _slidingExpiration;
+            }
+            set
+            {
+                if (value <= TimeSpan.Zero)
+                {
+                    throw new ArgumentOutOfRangeException(
+                        nameof(SlidingExpiration),
+                        value,
+                        "The sliding expiration value must be positive.");
+                }
+                _slidingExpiration = value;
+            }
+        }
+
+        internal IList<IChangeToken> _expirationTokens;
+        public IList<IChangeToken> ExpirationTokens
+        {
+            get
+            {
+                if (_expirationTokens == null)
+                {
+                    _expirationTokens = new List<IChangeToken>();
+                }
+
+                return _expirationTokens;
+            }
+        }
+
         internal TimeSpan? _absoluteExpirationRelativeToNow;
 
         private IDisposable _scope;
 
         internal EvictionReason EvictionReason { get; private set; }
 
+        /// <summary>
+        /// 最后一次处理时间
+        /// </summary>
         internal DateTimeOffset LastAccessed { get; set; }
 
         private IList<IDisposable> _expirationTokenRegistrations;
@@ -150,14 +191,15 @@ namespace Caching.Memory.Application
 
         private bool CheckForExpiredTime(DateTimeOffset now)
         {
+            //绝对过期
             if (_absoluteExpiration.HasValue && _absoluteExpiration.Value <= now)
             {
                 SetExpired(EvictionReason.Expired);
                 return true;
             }
 
-            if (_slidingExpiration.HasValue
-                && (now - LastAccessed) >= _slidingExpiration)
+            //滑动过期
+            if (_slidingExpiration.HasValue && (now - LastAccessed) >= _slidingExpiration)
             {
                 SetExpired(EvictionReason.Expired);
                 return true;
@@ -181,6 +223,29 @@ namespace Caching.Memory.Application
                 }
             }
             return false;
+        }
+
+        internal void AttachTokens()
+        {
+            if (_expirationTokens != null)
+            {
+                lock (_lock)
+                {
+                    for (int i = 0; i < _expirationTokens.Count; i++)
+                    {
+                        IChangeToken expirationToken = _expirationTokens[i];
+                        if (expirationToken.ActiveChangeCallbacks)
+                        {
+                            if (_expirationTokenRegistrations == null)
+                            {
+                                _expirationTokenRegistrations = new List<IDisposable>(1);
+                            }
+                            IDisposable registration = expirationToken.RegisterChangeCallback(ExpirationCallback, this);
+                            _expirationTokenRegistrations.Add(registration);
+                        }
+                    }
+                }
+            }
         }
     }
 
