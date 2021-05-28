@@ -1,29 +1,27 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿//using System;
 
-namespace IChangeToken.Application
-{
-    public interface IChangeToken
-    {
-        /// <summary>
-        /// Gets a value that indicates if a change has occurred.
-        /// </summary>
-        bool HasChanged { get; }
+//namespace IChangeToken.Application
+//{
+//    public interface IChangeToken
+//    {
+//        /// <summary>
+//        /// 判断当前token是否改变
+//        /// </summary>
+//        bool HasChanged { get; }
 
-        /// <summary>
-        /// Indicates if this token will pro-actively raise callbacks. If <c>false</c>, the token consumer must
-        /// poll <see cref="HasChanged" /> to detect changes.
-        /// </summary>
-        bool ActiveChangeCallbacks { get; }
+//        /// <summary>
+//        /// token自动触发回调,token消费者自动接收到改变
+//        /// poll <see cref="HasChanged" /> to detect changes.
+//        /// </summary>
+//        bool ActiveChangeCallbacks { get; }
 
-        /// <summary>
-        /// Registers for a callback that will be invoked when the entry has changed.
-        /// <see cref="HasChanged"/> MUST be set before the callback is invoked.
-        /// </summary>
-        /// <param name="callback">The <see cref="Action{Object}"/> to invoke.</param>
-        /// <param name="state">State to be passed into the callback.</param>
-        /// <returns>An <see cref="IDisposable"/> that is used to unregister the callback.</returns>
-        IDisposable RegisterChangeCallback(Action<object> callback, object state);
-    }
-}
+//        /// <summary>
+//        /// 注册回调函数,当实体发现改变的时候
+//        /// <see cref="HasChanged"/> 回调触发前,必须设置HasChanged值
+//        /// </summary>
+//        /// <param name="callback">The <see cref="Action{Object}"/> to invoke.</param>
+//        /// <param name="state">State to be passed into the callback.</param>
+//        /// <returns>An <see cref="IDisposable"/> that is used to unregister the callback.</returns>
+//        IDisposable RegisterChangeCallback(Action<object> callback, object state);
+//    }
+//}

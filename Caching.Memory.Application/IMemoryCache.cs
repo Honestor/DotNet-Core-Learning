@@ -51,6 +51,7 @@ namespace Caching.Memory.Application
         /// <param name="entry"></param>
         private void SetEntry(CacheEntry entry)
         {
+            //如果设置缓存实体的大小限制,那么缓存实体的大小也必须要限制
             if (_options.SizeLimit.HasValue && !entry.Size.HasValue)
             {
                 throw new InvalidOperationException($"Cache entry must specify a value for {nameof(entry.Size)} when {nameof(_options.SizeLimit)} is set.");
