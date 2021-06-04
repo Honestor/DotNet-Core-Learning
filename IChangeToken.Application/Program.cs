@@ -10,9 +10,10 @@ namespace IChangeToken.Application
     {
         static void Main(string[] args)
         {
-            var machine = new Machine();
-            machine._warnEvent += Test;
-            machine.Run();
+            //var machine = new Machine();
+            //machine._warnEvent += Test;
+            //machine.Run();
+            var t = DateTime.Today;
             Console.ReadKey();
         }
 
